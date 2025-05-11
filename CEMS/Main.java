@@ -4,8 +4,11 @@ import service.EventService;
 import service.ParticipantService;
 import util.InputHelper;
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
 
 public class Main {
     private static EventService eventService = new EventService();
@@ -214,17 +217,39 @@ public class Main {
         }
         
         LocalDate today = LocalDate.now();
-        System.out.println("\nUpcoming Events:");
         boolean found = false;
         
+        // Sort events by date (ascending)
+        events.sort(Comparator.comparing(Event::getDate));
+        
+        // Print header
+        System.out.println("\n" + "-".repeat(100));
+        System.out.println(String.format("%-5s %-30s %-15s %-25s %-15s %s", 
+            "ID", "Event Name", "Date", "Venue", "Available", "Type"));
+        System.out.println("-".repeat(100));
+        
         for (Event event : events) {
-            if (event.getDate().isAfter(today) || event.getDate().isEqual(today)) {
+            // Only show today's and future events
+            if (!event.getDate().isBefore(today)) {
                 found = true;
-                System.out.println(event.getId() + ". " + event.getName() + 
-                                 " (Date: " + event.getDate() + 
-                                 ", Capacity: " + event.getCurrentRegistrations() + "/" + event.getCapacity() + ")");
+                // Get actual registrations for this event
+                List<Participant> registrations = participantService.getParticipantsByEvent(event.getId());
+                int currentRegistrations = registrations.size();
+                int available = Math.max(0, event.getCapacity() - currentRegistrations);
+                String availability = available > 0 ? 
+                    String.format("%d/%d", available, event.getCapacity()) : "FULL";
+                
+                System.out.println(String.format("%-5d %-30s %-15s %-25s %-15s %s",
+                    event.getId(),
+                    event.getName().length() > 28 ? event.getName().substring(0, 25) + "..." : event.getName(),
+                    event.getDate(),
+                    event.getVenue().length() > 23 ? event.getVenue().substring(0, 20) + "..." : event.getVenue(),
+                    availability,
+                    event.getType()));
             }
         }
+        
+        System.out.println("-".repeat(100));
         
         if (!found) {
             System.out.println("No upcoming events found!");
@@ -291,30 +316,75 @@ public class Main {
     }
 
     private static void registerForEvent() {
-        viewAllEventsForStudents();
-        int eventId = InputHelper.getIntInput("Enter event ID to register: ");
+        System.out.println("\n=== Upcoming Events for Registration ===");
+        viewUpcomingEvents();
+        
+        int eventId = InputHelper.getIntInput("\nEnter event ID to register (or 0 to cancel): ");
+        
+        if (eventId == 0) {
+            System.out.println("Registration cancelled.");
+            return;
+        }
+        
         Event event = eventService.findEventById(eventId);
         
         if (event == null) {
-            System.out.println("Event not found!");
+            System.out.println("Error: Event not found!");
             return;
         }
         
-        if (event.getCurrentRegistrations() >= event.getCapacity()) {
-            System.out.println("Event is full!");
+        // Check if event is in the future
+        if (event.getDate().isBefore(LocalDate.now())) {
+            System.out.println("Error: This event has already occurred!");
             return;
         }
         
-        String name = InputHelper.getStringInput("Enter your name: ");
+        // Get current registrations for this event
+        List<Participant> existingRegistrations = participantService.getParticipantsByEvent(eventId);
+        int currentRegistrations = existingRegistrations.size();
+        
+        // Check if event is full
+        if (currentRegistrations >= event.getCapacity()) {
+            System.out.println("\n❌ Sorry, this event is now full!");
+            System.out.println("Current registrations: " + currentRegistrations + "/" + event.getCapacity());
+            return;
+        }
+        
+        System.out.println("\n=== Registering for: " + event.getName() + " ===");
+        System.out.println("Date: " + event.getDate());
+        System.out.println("Venue: " + event.getVenue());
+        System.out.println("Available spots: " + (event.getCapacity() - currentRegistrations) + "/" + event.getCapacity());
+        
+        String name = InputHelper.getStringInput("\nEnter your full name: ");
         String email = InputHelper.getStringInput("Enter your email: ");
         String phone = InputHelper.getStringInput("Enter your phone number: ");
         
-        Participant participant = participantService.createParticipant(name, email, phone, eventId);
-        if (participant != null) {
-            eventService.incrementEventRegistrations(eventId);
-            System.out.println("Registration successful!");
-        } else {
-            System.out.println("Registration failed!");
+        // Check if email is already registered for this event
+        for (Participant p : existingRegistrations) {
+            if (p.getEmail().equalsIgnoreCase(email)) {
+                System.out.println("\n❌ Error: This email is already registered for this event!");
+                return;
+            }
+        }
+        
+        try {
+            // Create the participant
+            Participant participant = participantService.createParticipant(name, email, phone, eventId);
+            if (participant != null) {
+                // Update the event's registration count
+                event.setCurrentRegistrations(currentRegistrations + 1);
+                eventService.saveEvent(event);
+                
+                System.out.println("\n✅ Registration successful!");
+                System.out.println("Event: " + event.getName());
+                System.out.println("Date: " + event.getDate());
+                System.out.println("Your registration ID: " + participant.getId());
+                System.out.println("Total registrations for this event: " + (currentRegistrations + 1) + "/" + event.getCapacity());
+            } else {
+                System.out.println("\n❌ Registration failed! Please try again.");
+            }
+        } catch (Exception e) {
+            System.out.println("\n❌ An error occurred during registration: " + e.getMessage());
         }
     }
 
@@ -356,54 +426,79 @@ public class Main {
         System.out.println("\nCancel Registration");
         String email = InputHelper.getStringInput("Enter your email: ");
         
-        Participant participant = participantService.findParticipantByEmail(email);
-        if (participant == null) {
-            System.out.println("Student not found!");
-            return;
-        }
-
-        // Show events student is registered for
-        List<Event> events = eventService.getAllEvents();
-        List<Event> registeredEvents = new ArrayList<>();
+        // Find all participants with this email (user might be registered for multiple events)
+        List<Participant> userRegistrations = new ArrayList<>();
+        List<Event> allEvents = eventService.getAllEvents();
         
-        System.out.println("\nYour Event Registrations:");
-        for (Event event : events) {
-            List<Participant> registrations = participantService.getParticipantsByEvent(event.getId());
-            if (registrations != null) {
-                for (Participant p : registrations) {
-                    if (p.getEmail().equals(email)) {
-                        registeredEvents.add(event);
-                        System.out.println(event.getId() + ". " + event.getName());
-                        break;
-                    }
+        for (Event event : allEvents) {
+            List<Participant> participants = participantService.getParticipantsByEvent(event.getId());
+            for (Participant p : participants) {
+                if (p.getEmail().equalsIgnoreCase(email)) {
+                    userRegistrations.add(p);
                 }
             }
         }
-
-        if (registeredEvents.isEmpty()) {
-            System.out.println("You are not registered for any events.");
+        
+        if (userRegistrations.isEmpty()) {
+            System.out.println("No registrations found for this email!");
             return;
         }
-
-        int eventId = InputHelper.getIntInput("\nEnter Event ID to cancel registration: ");
         
-        // Verify the event ID is valid
-        boolean validEventId = false;
-        for (Event event : registeredEvents) {
-            if (event.getId() == eventId) {
-                validEventId = true;
+        // Group registrations by event
+        Map<Integer, List<Participant>> registrationsByEvent = new HashMap<>();
+        for (Participant p : userRegistrations) {
+            registrationsByEvent.computeIfAbsent(p.getEventId(), k -> new ArrayList<>()).add(p);
+        }
+        
+        // Show events with registration IDs
+        System.out.println("\nYour Registrations:");
+        System.out.println("-------------------");
+        
+        for (Map.Entry<Integer, List<Participant>> entry : registrationsByEvent.entrySet()) {
+            int eventId = entry.getKey();
+            Event event = eventService.findEventById(eventId);
+            if (event != null) {
+                System.out.println("Event: " + event.getName() + " (ID: " + eventId + ")");
+                System.out.println("Date: " + event.getDate());
+                System.out.println("Your Registration IDs:");
+                for (Participant p : entry.getValue()) {
+                    System.out.println("- " + p.getId());
+                }
+                System.out.println("-------------------");
+            }
+        }
+        
+        int registrationId = InputHelper.getIntInput("\nEnter Registration ID to cancel: ");
+        
+        // Find the registration
+        Participant registrationToCancel = null;
+        for (Participant p : userRegistrations) {
+            if (p.getId() == registrationId) {
+                registrationToCancel = p;
                 break;
             }
         }
-
-        if (!validEventId) {
-            System.out.println("Invalid Event ID. Please select from your registered events.");
+        
+        if (registrationToCancel == null) {
+            System.out.println("Invalid Registration ID. Please select from your registrations.");
             return;
         }
-
-        if (participantService.deleteParticipant(participant.getId())) {
-            eventService.decrementEventRegistrations(eventId);
-            System.out.println("Registration cancelled successfully!");
+        
+        // Delete the registration
+        if (participantService.deleteParticipant(registrationToCancel.getId())) {
+            // The deleteParticipant method now handles the event registration count update
+            System.out.println("\n✅ Registration cancelled successfully!");
+            
+            // Show updated event capacity
+            Event cancelledEvent = eventService.findEventById(registrationToCancel.getEventId());
+            if (cancelledEvent != null) {
+                List<Participant> remainingRegistrations = participantService.getParticipantsByEvent(cancelledEvent.getId());
+                System.out.println("Remaining capacity for " + cancelledEvent.getName() + ": " + 
+                                 (cancelledEvent.getCapacity() - remainingRegistrations.size()) + 
+                                 "/" + cancelledEvent.getCapacity());
+            }
+        } else {
+            System.out.println("\n❌ Failed to cancel registration. Please try again.");
         }
     }
-} 
+}

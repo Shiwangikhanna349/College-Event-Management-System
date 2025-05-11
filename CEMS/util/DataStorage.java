@@ -3,6 +3,7 @@ package util;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
+import model.Event;
 
 public class DataStorage {
     private static final String EVENTS_FILE = "events.txt";
@@ -63,6 +64,19 @@ public class DataStorage {
             writer.write("");
         } catch (IOException e) {
             System.err.println("Error clearing participants: " + e.getMessage());
+        }
+    }
+
+    public static void saveEvents(List<Event> events) {
+        try (PrintWriter writer = new PrintWriter(new FileWriter(EVENTS_FILE))) {
+            for (Event event : events) {
+                writer.println(event.getId() + "," + event.getName() + "," + 
+                             event.getDate() + "," + event.getVenue() + "," + 
+                             event.getOrganizer() + "," + event.getType() + "," + 
+                             event.getCapacity() + "," + event.getCurrentRegistrations());
+            }
+        } catch (IOException e) {
+            System.err.println("Error saving events: " + e.getMessage());
         }
     }
 } 

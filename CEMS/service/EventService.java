@@ -2,24 +2,25 @@ package service;
 
 import model.Event;
 import model.Participant;
-import java.util.ArrayList;
+import algorithms.BinarySearchTree;
 import java.time.LocalDate;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Queue;
-import java.util.LinkedList;
 import util.DataStorage;
 
-
 public class EventService {
-    private List<Event> events;
+    private List<Event> events;  // Using LinkedList for events
+    private BinarySearchTree<String> categoryTree;  // Tree for managing event categories
     private int nextEventId;
     private Map<Integer, List<Participant>> eventRegistrations;
     private Map<Integer, Queue<Participant>> eventWaitlists;
 
     public EventService() {
-        this.events = new ArrayList<>();
+        this.events = new LinkedList<>();
+        this.categoryTree = new BinarySearchTree<>();
         this.nextEventId = 1;
         this.eventRegistrations = new HashMap<>();
         this.eventWaitlists = new HashMap<>();
@@ -27,18 +28,33 @@ public class EventService {
     }
 
     private void loadEvents() {
+        // First load all events
         List<String> eventData = DataStorage.loadEvents();
         for (String data : eventData) {
             String[] parts = data.split(",");
-            if (parts.length == 7) {
+            if (parts.length >= 7) {  // Changed to >= to handle both old and new formats
                 int id = Integer.parseInt(parts[0]);
                 String name = parts[1];
                 LocalDate date = LocalDate.parse(parts[2]);
                 String venue = parts[3];
                 String organizer = parts[4];
-                String type = parts[5];
+                String type = parts[5].toLowerCase();  // Normalize to lowercase
                 int capacity = Integer.parseInt(parts[6]);
-                events.add(new Event(id, name, date, venue, organizer, type, capacity));
+                Event event = new Event(id, name, date, venue, organizer, type, capacity);
+                
+                // If the data includes currentRegistrations (new format), set it
+                int currentRegistrations = 0;
+                if (parts.length >= 8) {
+                    currentRegistrations = Integer.parseInt(parts[7]);
+                }
+                event.setCurrentRegistrations(currentRegistrations);
+                
+                // Initialize the eventRegistrations map with empty linked lists for each event
+                eventRegistrations.putIfAbsent(id, new LinkedList<>());
+                
+                events.add(event);
+                categoryTree.insert(type);  // First insert the category if it doesn't exist
+                categoryTree.incrementCount(type);  // Then increment the count
                 if (id >= nextEventId) {
                     nextEventId = id + 1;
                 }
@@ -46,24 +62,34 @@ public class EventService {
         }
     }
 
-    public Event createEvent(String name, LocalDate date, String venue, String organizer, String type, int capacity) {
-        Event event = new Event(nextEventId++, name, date, venue, organizer, type, capacity);
+    public void addEvent(String name, LocalDate date, String venue, String organizer, String type, int capacity) {
+        Event event = new Event(nextEventId++, name, date, venue, organizer, type.toLowerCase(), capacity);
         events.add(event);
+        categoryTree.insert(type.toLowerCase());  // First ensure the category exists
+        categoryTree.incrementCount(type.toLowerCase());  // Then increment its count
+        DataStorage.saveEvents(events);
+    }
+
+    public Event createEvent(String name, LocalDate date, String venue, String organizer, String type, int capacity) {
+        Event event = new Event(nextEventId++, name, date, venue, organizer, type.toLowerCase(), capacity);  // Normalize to lowercase
+        events.add(event);
+        categoryTree.insert(type.toLowerCase());  // Normalize to lowercase
+        categoryTree.incrementCount(type.toLowerCase());  // Increment the count for this category
         saveEvent(event);
         return event;
     }
 
-    private void saveEvent(Event event) {
-        String eventData = String.format("%d,%s,%s,%s,%s,%s,%d",
-            event.getId(),
-            event.getName(),
-            event.getDate().toString(),
-            event.getVenue(),
-            event.getOrganizer(),
-            event.getType(),
-            event.getCapacity()
-        );
-        DataStorage.saveEvent(eventData);
+    public void saveEvent(Event event) {
+        // Update the event in the events list
+        for (int i = 0; i < events.size(); i++) {
+            if (events.get(i).getId() == event.getId()) {
+                events.set(i, event);
+                break;
+            }
+        }
+        
+        // Save all events to file
+        DataStorage.saveEvents(events);
     }
 
     public boolean updateEvent(int id, String name, LocalDate date, String venue, String organizer, String type, int capacity) {
@@ -90,6 +116,7 @@ public class EventService {
         Event event = findEventById(id);
         if (event != null) {
             events.remove(event);
+            categoryTree.decrementCount(event.getType());  // Decrement category count
             // Save all events again
             DataStorage.clearEvents();
             for (Event e : events) {
@@ -101,7 +128,7 @@ public class EventService {
     }
 
     public List<Event> getAllEvents() {
-        return new ArrayList<>(events);
+        return new LinkedList<>(events);
     }
 
     public Event findEventById(int id) {
@@ -114,7 +141,7 @@ public class EventService {
     }
 
     public List<Event> findEventsByDate(LocalDate date) {
-        List<Event> result = new ArrayList<>();
+        List<Event> result = new LinkedList<>();
         for (Event event : events) {
             if (event.getDate().equals(date)) {
                 result.add(event);
@@ -124,9 +151,10 @@ public class EventService {
     }
 
     public List<Event> findEventsByType(String type) {
-        List<Event> result = new ArrayList<>();
+        List<Event> result = new LinkedList<>();
+        String normalizedType = type.toLowerCase();
         for (Event event : events) {
-            if (event.getType().equalsIgnoreCase(type)) {
+            if (event.getType().toLowerCase().equals(normalizedType)) {
                 result.add(event);
             }
         }
@@ -137,6 +165,7 @@ public class EventService {
         Event event = findEventById(eventId);
         if (event != null) {
             event.setCurrentRegistrations(event.getCurrentRegistrations() + 1);
+            saveEvent(event); // Save the updated event to file
             return true;
         }
         return false;
@@ -146,6 +175,7 @@ public class EventService {
         Event event = findEventById(eventId);
         if (event != null) {
             event.setCurrentRegistrations(event.getCurrentRegistrations() - 1);
+            saveEvent(event); // Save the updated event to file
             return true;
         }
         return false;
@@ -157,31 +187,37 @@ public class EventService {
             return false;
         }
 
-        // Initialize registration list and waitlist if not exists
-        eventRegistrations.putIfAbsent(eventId, new ArrayList<>());
-        eventWaitlists.putIfAbsent(eventId, new LinkedList<>());
-
-        List<Participant> registrations = eventRegistrations.get(eventId);
-        Queue<Participant> waitlist = eventWaitlists.get(eventId);
-
-        // Check if participant is already registered
-        if (registrations.contains(participant)) {
-            System.out.println("Participant is already registered for this event.");
-            return false;
+        // Get current registrations for this event
+        List<Participant> participants = eventRegistrations.computeIfAbsent(eventId, k -> new LinkedList<>());
+        
+        // Check if participant is already registered for this event
+        for (Participant p : participants) {
+            if (p.getEmail().equals(participant.getEmail())) {
+                System.out.println("You are already registered for this event!");
+                return false;
+            }
         }
 
         // Check if event is full
-        if (registrations.size() < event.getCapacity()) {
-            registrations.add(participant);
-            event.registerParticipant();
-            System.out.println("Successfully registered for the event!");
-            return true;
-        } else {
+        if (participants.size() >= event.getCapacity()) {
             // Add to waitlist
+            Queue<Participant> waitlist = eventWaitlists.computeIfAbsent(eventId, k -> new LinkedList<>());
             waitlist.add(participant);
-            System.out.println("Event is full. You have been added to the waitlist.");
+            System.out.println("Event is full! You have been added to the waitlist.");
             return false;
         }
+
+        // Register participant
+        participants.add(participant);
+        
+        // Update current registrations count
+        event.setCurrentRegistrations(event.getCurrentRegistrations() + 1);
+        saveEvent(event);  // Save the updated event with new registration count
+        
+        DataStorage.saveEvents(events);
+        
+        System.out.println("Successfully registered for the event!");
+        return true;
     }
 
     public boolean cancelRegistration(int eventId, Participant participant) {
@@ -227,7 +263,7 @@ public class EventService {
     }
 
     public List<Participant> getEventParticipants(int eventId) {
-        return eventRegistrations.getOrDefault(eventId, new ArrayList<>());
+        return eventRegistrations.getOrDefault(eventId, new LinkedList<>());
     }
 
     public Queue<Participant> getEventWaitlist(int eventId) {
@@ -256,5 +292,22 @@ public class EventService {
                 System.out.println("- " + participant.getName() + " (" + participant.getEmail() + ")");
             }
         }
+    }
+
+    // Method to display event categories with their counts
+    public void displayEventCategories() {
+        // First, collect all categories and their counts in a case-insensitive way
+        Map<String, Integer> categoryCounts = new HashMap<>();
+        for (Event event : events) {
+            String category = event.getType().toLowerCase();
+            categoryCounts.put(category, categoryCounts.getOrDefault(category, 0) + 1);
+        }
+        
+        // Display the categories with their counts
+        System.out.println("\nEvent Categories (with event counts):");
+        for (Map.Entry<String, Integer> entry : categoryCounts.entrySet()) {
+            System.out.println("- " + entry.getKey() + " (" + entry.getValue() + " events)");
+        }
+        System.out.println();
     }
 } 

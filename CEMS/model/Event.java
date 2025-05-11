@@ -2,7 +2,7 @@ package model;
 
 import java.time.LocalDate;
 
-public class Event {
+public class Event implements Comparable<Event> {
     private int id;
     private String name;
     private LocalDate date;
@@ -11,6 +11,17 @@ public class Event {
     private String type;
     private int capacity;
     private int currentRegistrations;
+
+    public static final int SORT_BY_ID = 0;
+    public static final int SORT_BY_DATE = 1;
+    public static final int SORT_BY_CAPACITY = 2;
+    public static final int SORT_BY_TYPE = 3;
+
+    private static int currentSortCriteria = SORT_BY_ID;
+
+    public static void setSortCriteria(int criteria) {
+        currentSortCriteria = criteria;
+    }
 
     public Event(int id, String name, LocalDate date, String venue, String organizer, String type, int capacity) {
         this.id = id;
@@ -112,5 +123,33 @@ public class Event {
                "Type: " + type + "\n" +
                "Capacity: " + capacity + "\n" +
                "Current Registrations: " + currentRegistrations;
+    }
+
+    @Override
+    public int compareTo(Event other) {
+        switch (currentSortCriteria) {
+            case SORT_BY_DATE:
+                return this.date.compareTo(other.date);
+            case SORT_BY_CAPACITY:
+                return Integer.compare(this.capacity, other.capacity);
+            case SORT_BY_TYPE:
+                return this.type.compareTo(other.type);
+            case SORT_BY_ID:
+            default:
+                return Integer.compare(this.id, other.id);
+        }
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        Event other = (Event) obj;
+        return this.id == other.id;
+    }
+
+    @Override
+    public int hashCode() {
+        return id;
     }
 } 
