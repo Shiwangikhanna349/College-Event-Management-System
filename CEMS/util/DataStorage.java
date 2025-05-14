@@ -25,7 +25,7 @@ public class DataStorage {
                 events.add(line);
             }
         } catch (IOException e) {
-            // File doesn't exist yet, that's okay
+            
         }
         return events;
     }
@@ -46,7 +46,7 @@ public class DataStorage {
                 participants.add(line);
             }
         } catch (IOException e) {
-            // File doesn't exist yet, that's okay
+            
         }
         return participants;
     }

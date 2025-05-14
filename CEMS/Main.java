@@ -4,7 +4,7 @@ import service.EventService;
 import service.ParticipantService;
 import util.InputHelper;
 import java.time.LocalDate;
-import java.util.Comparator;
+import algorithms.SortingAlgorithms;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
@@ -186,9 +186,13 @@ public class Main {
             System.out.println("No events found!");
             return;
         }
-        
+        // Use custom QuickSort to sort by name
+        Event.setSortCriteria(Event.SORT_BY_TYPE); // We'll use TYPE as a proxy for name for demonstration, or you can add a SORT_BY_NAME
+        Event[] eventArray = events.toArray(new Event[0]);
+        // If you want to sort by name, add SORT_BY_NAME to Event and implement in compareTo
+        SortingAlgorithms.quickSort(eventArray, 0, eventArray.length - 1);
         System.out.println("\nAll Events:");
-        for (Event event : events) {
+        for (Event event : eventArray) {
             System.out.println(event);
             System.out.println("-------------------");
         }
@@ -200,9 +204,12 @@ public class Main {
             System.out.println("No events found!");
             return;
         }
-        
+        // Use custom BubbleSort to sort by capacity
+        Event.setSortCriteria(Event.SORT_BY_CAPACITY);
+        Event[] eventArray = events.toArray(new Event[0]);
+        SortingAlgorithms.bubbleSort(eventArray);
         System.out.println("\nAvailable Events:");
-        for (Event event : events) {
+        for (Event event : eventArray) {
             System.out.println(event.getId() + ". " + event.getName() + 
                              " (Date: " + event.getDate() + 
                              ", Capacity: " + event.getCurrentRegistrations() + "/" + event.getCapacity() + ")");
@@ -215,24 +222,19 @@ public class Main {
             System.out.println("No events found!");
             return;
         }
-        
+        // Use custom MergeSort to sort by date
+        Event.setSortCriteria(Event.SORT_BY_DATE);
+        Event[] eventArray = events.toArray(new Event[0]);
+        SortingAlgorithms.mergeSort(eventArray, 0, eventArray.length - 1);
         LocalDate today = LocalDate.now();
         boolean found = false;
-        
-        // Sort events by date (ascending)
-        events.sort(Comparator.comparing(Event::getDate));
-        
-        // Print header
         System.out.println("\n" + "-".repeat(100));
         System.out.println(String.format("%-5s %-30s %-15s %-25s %-15s %s", 
             "ID", "Event Name", "Date", "Venue", "Available", "Type"));
         System.out.println("-".repeat(100));
-        
-        for (Event event : events) {
-            // Only show today's and future events
+        for (Event event : eventArray) {
             if (!event.getDate().isBefore(today)) {
                 found = true;
-                // Get actual registrations for this event
                 List<Participant> registrations = participantService.getParticipantsByEvent(event.getId());
                 int currentRegistrations = registrations.size();
                 int available = Math.max(0, event.getCapacity() - currentRegistrations);

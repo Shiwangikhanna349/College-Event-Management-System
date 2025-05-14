@@ -1,11 +1,10 @@
 package service;
 
 import model.Participant;
-import service.EventService;
 import util.DataStorage;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Iterator;
+
 import model.Event;
 
 public class ParticipantService {
@@ -14,7 +13,7 @@ public class ParticipantService {
     private EventService eventService;
 
     public ParticipantService() {
-        this.participants = new LinkedList<>();  // Using LinkedList instead of ArrayList
+        this.participants = new LinkedList<>(); 
         this.nextParticipantId = 1;
         this.eventService = new EventService();
         loadParticipants();
@@ -30,18 +29,18 @@ public class ParticipantService {
                 String email = parts[2];
                 String phone = parts[3];
                 int eventId = Integer.parseInt(parts[4]);
-                
+
                 // Create and add participant
                 Participant participant = new Participant(id, name, email, phone, eventId);
                 participants.add(participant);
-                
+
                 // Update the event's registration count
                 Event event = eventService.findEventById(eventId);
                 if (event != null) {
                     event.setCurrentRegistrations(event.getCurrentRegistrations() + 1);
                     eventService.saveEvent(event);
                 }
-                
+
                 // Update nextParticipantId to be max ID + 1
                 if (id >= nextParticipantId) {
                     nextParticipantId = id + 1;
@@ -61,12 +60,11 @@ public class ParticipantService {
 
     private void saveParticipant(Participant participant) {
         String participantData = String.format("%d,%s,%s,%s,%d",
-            participant.getId(),
-            participant.getName(),
-            participant.getEmail(),
-            participant.getPhone(),
-            participant.getEventId()
-        );
+                participant.getId(),
+                participant.getName(),
+                participant.getEmail(),
+                participant.getPhone(),
+                participant.getEventId());
         DataStorage.saveParticipant(participantData);
     }
 
@@ -79,37 +77,36 @@ public class ParticipantService {
                 event.setCurrentRegistrations(Math.max(0, event.getCurrentRegistrations() - 1));
                 eventService.saveEvent(event);
             }
-            
+
             // Remove the participant
             participants.remove(participantToDelete);
-            
+
             // Create a new list with updated IDs
             List<Participant> updatedParticipants = new LinkedList<>();
             int currentId = 1;
-            
+
             // Add all participants with updated IDs
             for (Participant p : participants) {
                 // Create a new participant with the new ID
                 Participant updated = new Participant(
-                    currentId++,
-                    p.getName(),
-                    p.getEmail(),
-                    p.getPhone(),
-                    p.getEventId()
-                );
+                        currentId++,
+                        p.getName(),
+                        p.getEmail(),
+                        p.getPhone(),
+                        p.getEventId());
                 updatedParticipants.add(updated);
             }
-            
+
             // Update the participants list and nextParticipantId
             participants = updatedParticipants;
             nextParticipantId = currentId;
-            
+
             // Save all participants with their new IDs
             DataStorage.clearParticipants();
             for (Participant p : participants) {
                 saveParticipant(p);
             }
-            
+
             return true;
         }
         return false;
@@ -146,4 +143,4 @@ public class ParticipantService {
     public List<Participant> getAllParticipants() {
         return new LinkedList<>(participants);
     }
-} 
+}

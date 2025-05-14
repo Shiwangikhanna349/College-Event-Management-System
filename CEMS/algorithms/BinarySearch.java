@@ -20,20 +20,5 @@ public class BinarySearch {
         return -1; // Element not found
     }
 
-    // Recursive binary search implementation
-    public static <T extends Comparable<T>> int binarySearchRecursive(T[] arr, T target, int left, int right) {
-        if (left <= right) {
-            int mid = left + (right - left) / 2;
 
-            if (arr[mid].equals(target))
-                return mid;
-
-            if (arr[mid].compareTo(target) < 0)
-                return binarySearchRecursive(arr, target, mid + 1, right);
-            else
-                return binarySearchRecursive(arr, target, left, mid - 1);
-        }
-
-        return -1; // Element not found
-    }
 } 

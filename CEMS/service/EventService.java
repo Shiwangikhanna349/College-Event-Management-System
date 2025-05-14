@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Queue;
+import algorithms.BinarySearch;
 import util.DataStorage;
 
 public class EventService {
@@ -131,12 +132,16 @@ public class EventService {
         return new LinkedList<>(events);
     }
 
+    // Uses binary search to find Event by ID in a sorted array (for project requirement)
     public Event findEventById(int id) {
-        for (Event event : events) {
-            if (event.getId() == id) {
-                return event;
-            }
-        }
+        if (events.isEmpty()) return null;
+        // Sort events by ID
+        events.sort((a, b) -> Integer.compare(a.getId(), b.getId()));
+        Event[] eventArray = events.toArray(new Event[0]);
+        // Create a dummy Event with the target ID for comparison
+        Event target = new Event(id, "", null, "", "", "", 0);
+        int idx = BinarySearch.binarySearch(eventArray, target);
+        if (idx >= 0) return eventArray[idx];
         return null;
     }
 
