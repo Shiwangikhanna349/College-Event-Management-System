@@ -1,5 +1,6 @@
-2,Synnertech,2025-05-24,open ground,Coding Ninjas,open ground,120,7
+2,Synnertech,2025-05-24,open ground,Coding Ninjas,open ground,120,9
 3,Techspire,2025-05-18,Faraday Hall,Coding Ninjas,expert talk,130,2
-4,Generative AI,2025-05-20,Faraday Hall,Coding Ninjas,expert talk,50,8
+4,Generative AI,2025-05-20,Faraday Hall,Coding Ninjas,expert talk,50,10
 5,Algothon,2025-05-21,Turing block,Coding ninjas,expert talk,50,0
 6,Avinya,2025-05-27,pierre hall,Coding ninjas,expert talk,60,0
+7,algiohon,2025-05-19,Alpha zone,coding ninjas,open ground,120,0
